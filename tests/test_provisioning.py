@@ -150,6 +150,43 @@ def test_delete_ready_environment_removes_it_and_its_resources(
     assert operation_history["status"] == "SUCCEEDED"
 
 
+def test_delete_failed_environment_removes_it_and_preserves_operation_history(
+    base_url, create_environment
+):
+    _payload, status, accepted = create_environment(
+        failure_injection={"resource": "compute"}
+    )
+    assert status == 202, accepted
+
+    operation = wait_for_operation(base_url, accepted["operation_id"])
+    assert operation["status"] == "FAILED", operation
+
+    status, environment = request_json(
+        base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 200, environment
+    assert environment["status"] == "FAILED"
+
+    status, response = request_json(
+        base_url, f"/environments/{accepted['environment_id']}", method="DELETE"
+    )
+    assert status == 204
+    assert response is None
+
+    status, response = request_json(
+        base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 404
+    assert response == {"error": "not_found"}
+
+    status, operation_history = request_json(
+        base_url, f"/operations/{accepted['operation_id']}"
+    )
+    assert status == 200, operation_history
+    assert operation_history["status"] == "FAILED"
+    assert operation_history["error"] == operation["error"]
+
+
 def test_get_nonexistent_environment_returns_not_found(base_url):
     environment_id = str(uuid.uuid4())
     status, response = request_json(base_url, f"/environments/{environment_id}")

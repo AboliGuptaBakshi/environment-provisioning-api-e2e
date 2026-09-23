@@ -26,13 +26,13 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover malformed JSON, a missing required size, unsupported region, and non-string region; each checks the relevant error and confirms both environment and operation lists remain empty for its unique name. |
 | R5 | A deterministic injected `compute` failure produces a terminal failed operation and stable reason. | Inject failure after network creation; poll to `FAILED` and assert the stable error. |
 | R6 | An injected `compute` failure rolls back resources already created for that environment. | Read the failed environment and assert its resource list is empty. |
-| R7 | Deleting a `READY` environment removes the environment and its resources while preserving operation history; deleting while `PROVISIONING` is rejected. | Provision to `READY`, DELETE and assert `204`; GET and name-filtered listing return no environment, while the original operation remains readable. For the conflict case, GET and assert `PROVISIONING` immediately before DELETE, then assert `409`. |
+| R7 | Deleting a `READY` or `FAILED` environment removes it and its resources while preserving operation history; deleting while `PROVISIONING` is rejected. | For `READY` and `FAILED` environments, DELETE and assert `204`, GET returns `404`, and the completed operation remains readable. For the conflict case, GET and assert `PROVISIONING` immediately before DELETE, then assert `409`. |
 | R8 | GET for an unknown or deleted environment returns `404 Not Found`. | GET a unique nonexistent ID and assert `{"error":"not_found"}`; the delete lifecycle also checks the deleted ID. |
 | R9 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
 
 ## Risk-based strategy
 
-Prioritize lifecycle correctness and externally visible state because false success or orphaned partial resources are the highest-impact outcomes in provisioning. Next cover invalid requests that might start unintended work, and bounded polling so a hung operation cannot stall CI. Cover representative inputs rather than every permutation. Keep the retry/idempotency case as stretch work after core behaviors pass.
+Prioritize lifecycle correctness and externally visible state because false success or orphaned partial resources are the highest-impact outcomes in provisioning. For deletion, cover state-appropriate acceptance/rejection, disappearance of the environment and resources, and retention of operation history; accidental deletion during provisioning and loss of audit history are key risks. Next cover invalid requests that might start unintended work, and bounded polling so a hung operation cannot stall CI. Cover representative inputs rather than every permutation. Keep the retry/idempotency case as stretch work after core behaviors pass.
 
 ## Core test cases
 
@@ -45,9 +45,10 @@ Prioritize lifecycle correctness and externally visible state because false succ
 7. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
 8. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
 9. Delete a ready environment: assert `204`, then verify GET and filtered listing show it is absent while its completed operation remains available.
-10. GET a nonexistent environment: assert `404 Not Found` and the not-found error payload.
-11. Delete while provisioning: use a server fixture with a controlled longer provisioning delay, GET and assert the environment is `PROVISIONING` immediately before DELETE, assert `409 Conflict`, and verify provisioning continues to its normal successful state.
-12. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
+10. Delete a failed environment: inject the deterministic `compute` failure, wait for and verify environment state `FAILED`, assert DELETE returns `204`, GET returns `404`, and the failed operation history remains readable.
+11. GET a nonexistent environment: assert `404 Not Found` and the not-found error payload.
+12. Delete while provisioning: use a server fixture with a controlled longer provisioning delay, GET and assert the environment is `PROVISIONING` immediately before DELETE, assert `409 Conflict`, and verify provisioning continues to its normal successful state.
+13. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
 
 ## Determinism and independence
 
