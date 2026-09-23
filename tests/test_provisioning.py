@@ -1,141 +1,113 @@
-"""End-to-end tests against an ephemeral real HTTP server."""
+"""Pytest end-to-end scenarios against the real provisioning HTTP API."""
 
-import tempfile
-import threading
 import time
-import unittest
 import uuid
 from urllib.parse import quote
 
-from app.server import create_server
+import pytest
+
 from tests.helpers import request_json, wait_for_operation
 
 
-class ProvisioningApiE2ETests(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.server = create_server(
-            port=0,
-            db_path=f"{self.temp_dir.name}/assessment.sqlite3",
-            step_delay=0.08,
-        )
-        self.base_url = f"http://127.0.0.1:{self.server.server_address[1]}"
-        self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.server_thread.start()
+def assert_rejected_without_state(base_url, payload, expected_field):
+    status, result = request_json(base_url, "/environments", "POST", payload)
+    assert status == 400, result
+    assert result["error"] == "validation_error"
+    assert expected_field in result["details"]
 
-    def tearDown(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.server_thread.join(timeout=2)
-        self.temp_dir.cleanup()
+    query = quote(payload["name"], safe="")
+    status, environments = request_json(base_url, f"/environments?name={query}")
+    assert status == 200, environments
+    assert environments["items"] == []
 
-    def create_environment(self, **overrides):
-        payload = {
-            "name": f"assessment-{uuid.uuid4().hex[:12]}",
-            "region": "us-east",
-            "size": "small",
-        }
-        payload.update(overrides)
-        status, result = request_json(self.base_url, "/environments", "POST", payload)
-        return payload, status, result
-
-    def assert_rejected_without_state(self, payload, expected_field):
-        status, result = request_json(
-            self.base_url, "/environments", "POST", payload
-        )
-        self.assertEqual(status, 400, result)
-        self.assertEqual(result["error"], "validation_error")
-        self.assertIn(expected_field, result["details"])
-
-        query = quote(payload["name"], safe="")
-        status, environments = request_json(
-            self.base_url, f"/environments?name={query}"
-        )
-        self.assertEqual(status, 200, environments)
-        self.assertEqual(environments["items"], [])
-
-        status, operations = request_json(
-            self.base_url, f"/operations?environment_name={query}"
-        )
-        self.assertEqual(status, 200, operations)
-        self.assertEqual(operations["items"], [])
-
-    def test_happy_path_persists_configuration_and_complete_resources(self):
-        payload, status, accepted = self.create_environment()
-        self.assertEqual(status, 202, accepted)
-        self.assertEqual(accepted["status"], "PENDING")
-        self.assertTrue(accepted["environment_id"])
-        self.assertTrue(accepted["operation_id"])
-
-        operation = wait_for_operation(self.base_url, accepted["operation_id"])
-        self.assertEqual(operation["status"], "SUCCEEDED", operation)
-        self.assertIsNone(operation["error"])
-        status, environment = request_json(
-            self.base_url, f"/environments/{accepted['environment_id']}"
-        )
-        self.assertEqual(status, 200, environment)
-        self.assertEqual(environment["status"], "READY")
-        self.assertEqual(environment["name"], payload["name"])
-        self.assertEqual(environment["region"], payload["region"])
-        self.assertEqual(environment["size"], payload["size"])
-        self.assertEqual(environment["resources"], [
-            {"name": "compute", "status": "READY"},
-            {"name": "network", "status": "READY"},
-        ])
-
-    def test_missing_size_is_rejected_without_creating_environment_or_operation(self):
-        payload = {"name": f"invalid-{uuid.uuid4().hex}", "region": "us-east"}
-        self.assert_rejected_without_state(payload, "size")
-
-    def test_unsupported_region_is_rejected_without_creating_environment_or_operation(self):
-        payload = {
-            "name": f"invalid-{uuid.uuid4().hex}",
-            "region": "moon-1",
-            "size": "small",
-        }
-        self.assert_rejected_without_state(payload, "region")
-
-    def test_non_string_region_is_rejected_without_creating_environment_or_operation(self):
-        payload = {
-            "name": f"invalid-{uuid.uuid4().hex}",
-            "region": {"unexpected": "object"},
-            "size": "small",
-        }
-        self.assert_rejected_without_state(payload, "region")
-
-    def test_injected_partial_failure_is_terminal_and_retains_prior_resource(self):
-        _payload, status, accepted = self.create_environment(
-            failure_injection={"resource": "compute"}
-        )
-        self.assertEqual(status, 202, accepted)
-        operation = wait_for_operation(self.base_url, accepted["operation_id"])
-        self.assertEqual(operation["status"], "FAILED", operation)
-        self.assertEqual(operation["error"], "Injected failure while creating resource 'compute'")
-
-        status, environment = request_json(
-            self.base_url, f"/environments/{accepted['environment_id']}"
-        )
-        self.assertEqual(status, 200, environment)
-        self.assertEqual(environment["status"], "FAILED")
-        self.assertEqual(environment["resources"], [{"name": "network", "status": "READY"}])
-
-    def test_client_deadline_reports_last_state_and_operation_can_finish_later(self):
-        _payload, status, accepted = self.create_environment()
-        self.assertEqual(status, 202, accepted)
-        started = time.monotonic()
-        with self.assertRaisesRegex(TimeoutError, "last state:.*PENDING"):
-            wait_for_operation(self.base_url, accepted["operation_id"], timeout=0.01)
-        self.assertLess(time.monotonic() - started, 0.5)
-
-        operation = wait_for_operation(self.base_url, accepted["operation_id"], timeout=2)
-        self.assertEqual(operation["status"], "SUCCEEDED", operation)
-        status, environment = request_json(
-            self.base_url, f"/environments/{accepted['environment_id']}"
-        )
-        self.assertEqual(status, 200, environment)
-        self.assertEqual(environment["status"], "READY")
-        self.assertEqual(len(environment["resources"]), 2)
+    status, operations = request_json(
+        base_url, f"/operations?environment_name={query}"
+    )
+    assert status == 200, operations
+    assert operations["items"] == []
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_happy_path_persists_configuration_and_complete_resources(base_url, create_environment):
+    payload, status, accepted = create_environment()
+    assert status == 202, accepted
+    assert accepted["status"] == "PENDING"
+    assert accepted["environment_id"]
+    assert accepted["operation_id"]
+
+    operation = wait_for_operation(base_url, accepted["operation_id"])
+    assert operation["status"] == "SUCCEEDED", operation
+    assert operation["error"] is None
+    status, environment = request_json(
+        base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 200, environment
+    assert environment["status"] == "READY"
+    assert environment["name"] == payload["name"]
+    assert environment["region"] == payload["region"]
+    assert environment["size"] == payload["size"]
+    assert environment["resources"] == [
+        {"name": "compute", "status": "READY"},
+        {"name": "network", "status": "READY"},
+    ]
+
+
+def test_missing_size_is_rejected_without_creating_environment_or_operation(base_url):
+    payload = {"name": f"invalid-{uuid.uuid4().hex}", "region": "us-east"}
+    assert_rejected_without_state(base_url, payload, "size")
+
+
+def test_unsupported_region_is_rejected_without_creating_environment_or_operation(base_url):
+    payload = {
+        "name": f"invalid-{uuid.uuid4().hex}",
+        "region": "moon-1",
+        "size": "small",
+    }
+    assert_rejected_without_state(base_url, payload, "region")
+
+
+def test_non_string_region_is_rejected_without_creating_environment_or_operation(base_url):
+    payload = {
+        "name": f"invalid-{uuid.uuid4().hex}",
+        "region": {"unexpected": "object"},
+        "size": "small",
+    }
+    assert_rejected_without_state(base_url, payload, "region")
+
+
+def test_injected_partial_failure_is_terminal_and_retains_prior_resource(
+    base_url, create_environment
+):
+    _payload, status, accepted = create_environment(
+        failure_injection={"resource": "compute"}
+    )
+    assert status == 202, accepted
+    operation = wait_for_operation(base_url, accepted["operation_id"])
+    assert operation["status"] == "FAILED", operation
+    assert operation["error"] == "Injected failure while creating resource 'compute'"
+
+    status, environment = request_json(
+        base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 200, environment
+    assert environment["status"] == "FAILED"
+    assert environment["resources"] == [{"name": "network", "status": "READY"}]
+
+
+def test_client_deadline_reports_last_state_and_operation_can_finish_later(
+    base_url, create_environment
+):
+    _payload, status, accepted = create_environment()
+    assert status == 202, accepted
+    started = time.monotonic()
+    with pytest.raises(TimeoutError, match="last state:.*PENDING"):
+        wait_for_operation(base_url, accepted["operation_id"], timeout=0.01)
+    assert time.monotonic() - started < 0.5
+
+    operation = wait_for_operation(base_url, accepted["operation_id"], timeout=2)
+    assert operation["status"] == "SUCCEEDED", operation
+    status, environment = request_json(
+        base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 200, environment
+    assert environment["status"] == "READY"
+    assert len(environment["resources"]) == 2

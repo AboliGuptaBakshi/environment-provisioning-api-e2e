@@ -29,3 +29,11 @@ Chronological record of AI-assisted work for this assessment. Entries capture th
 **Assistant change:** Replaced the parameterized loop/subtests with distinct tests for missing `size`, unsupported `region`, and non-string `region`. Kept common HTTP/no-state assertions in a helper. Updated R4 traceability and the core test-case list. No API functionality changed.
 
 **Verification:** `python3 -m unittest discover -s tests -v` passed all 6 tests, including the three separate invalid-input cases.
+
+## 2026-09-23 — Convert suite to pytest
+
+**User request:** Refactor the six scenarios to pytest, add `conftest.py` fixtures for server lifecycle/base URL/reusable setup, retain request and polling utilities in `helpers.py`, update setup/traceability/CI, run the full suite, and make one commit without expanding scope.
+
+**Assistant change:** Replaced the `unittest.TestCase` class with six pytest test functions. Added per-test server, base URL, and environment-factory fixtures. Kept HTTP request and bounded polling helpers in `tests/helpers.py`. Added `requirements-dev.txt`, updated README and requirement/test runner references, and changed CI to install pytest and run `python -m pytest -v`. No scenarios or API features were added.
+
+**Verification:** Pytest was not installed initially. The first package install attempt was blocked by sandbox network restrictions; installed the declared dependency with network permission. `python3 -m pytest -v` passed all 6 scenarios in 3.63 seconds.

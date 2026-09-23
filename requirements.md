@@ -13,7 +13,7 @@ A generic Python REST API simulates provisioning one kind of environment and its
 
 The supported region is `us-east`; sizes are `small` and `medium`. Names must be 1–63 characters and contain only letters, digits, and hyphens. On failure, previously created resources are retained and returned with a failed environment state. For deterministic assessment testing, the simulator accepts optional `failure_injection: {"resource": "compute"}`; this fails at that named step after network creation. Failure injection is configurable and enabled by default for local/assessment use.
 
-The API is a small Python standard-library HTTP server with SQLite persistence; tests use HTTP over localhost and Python's built-in `unittest` runner. This avoids external runtime dependencies while exercising the actual REST boundary.
+The API is a small Python standard-library HTTP server with SQLite persistence; pytest tests use HTTP over localhost to exercise the actual REST boundary. Pytest is the only test dependency.
 
 ## Requirements and traceability
 
@@ -22,7 +22,7 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R1 | A valid request is accepted with environment and operation identifiers. | Submit via REST; assert response fields and retrieve the identified records. |
 | R2 | Successful provisioning reaches a terminal success state within a bounded client deadline. | Poll operation using a monotonic deadline; assert terminal state. |
 | R3 | A successful environment reflects requested configuration and has the complete expected resource set. | Read environment and resources after success; assert values and completeness. |
-| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate tests cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
+| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
 | R5 | A deterministic injected resource failure produces a terminal failed operation and stable reason. | Request failure at a named provisioning step; assert operation state and reason. |
 | R6 | State after partial failure follows the documented cleanup/retention policy. | Read environment and resources after injected failure; assert exact resulting state. |
 | R7 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
@@ -57,4 +57,4 @@ Failure injection will be per request and target a named provisioning step, with
 
 ## CI gate
 
-The CI workflow runs `python -m unittest discover -s tests -v` using the standard library. A nonzero test result fails the workflow; the readiness gate is a passing workflow.
+The CI workflow installs `requirements-dev.txt` and runs `python -m pytest -v`. A nonzero test result fails the workflow; the readiness gate is a passing workflow.
