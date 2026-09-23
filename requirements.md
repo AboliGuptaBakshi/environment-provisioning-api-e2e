@@ -22,7 +22,7 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R1 | A valid request is accepted with environment and operation identifiers. | Submit via REST; assert response fields and retrieve the identified records. |
 | R2 | Successful provisioning reaches a terminal success state within a bounded client deadline. | Poll operation using a monotonic deadline; assert terminal state. |
 | R3 | A successful environment reflects requested configuration and has the complete expected resource set. | Read environment and resources after success; assert values and completeness. |
-| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Submit representative invalid requests; assert field errors and query the environment list by unique name to confirm no state was created. |
+| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate tests cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
 | R5 | A deterministic injected resource failure produces a terminal failed operation and stable reason. | Request failure at a named provisioning step; assert operation state and reason. |
 | R6 | State after partial failure follows the documented cleanup/retention policy. | Read environment and resources after injected failure; assert exact resulting state. |
 | R7 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
@@ -34,11 +34,13 @@ Prioritize lifecycle correctness and externally visible state because false succ
 ## Core test cases
 
 1. Happy path: submit a valid request, poll to success, then verify requested configuration and all expected resources.
-2. Invalid input: omit a required value and supply an unsupported value; verify useful validation and no created environment or operation.
-3. Injected partial failure: fail at a named resource step; verify terminal failure, stable reason, and the documented state of resources already created.
-4. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
-5. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
-6. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
+2. Missing required size: verify a field-level validation error and no environment or operation.
+3. Unsupported region: verify a field-level validation error and no environment or operation.
+4. Non-string region: verify malformed value handling, a field-level validation error, and no environment or operation.
+5. Injected partial failure: fail at a named resource step; verify terminal failure, stable reason, and the documented state of resources already created.
+6. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
+7. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
+8. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
 
 ## Determinism and independence
 

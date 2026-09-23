@@ -21,3 +21,11 @@ Chronological record of AI-assisted work for this assessment. Entries capture th
 **Assistant implementation:** Added a standard-library HTTP server with SQLite-backed environments, operations, and resources. The API supports asynchronous provisioning, `network` then `compute`, validation, operation and environment reads, filtered environment listing for no-state checks, and per-request failure at `compute`. The documented partial-failure policy retains the already-created network and marks both operation and environment failed. Added real localhost HTTP tests using `unittest`, a monotonic bounded poll helper, local setup instructions, and a GitHub Actions pass/fail workflow. No idempotency feature was added.
 
 **Verification:** Initial sandbox test attempt could not bind an ephemeral localhost port. Reran with the required local-network permission. First run exposed an empty-query parsing issue in the no-state assertion; fixed query parsing and ensured SQLite connections are closed. Final command `python3 -m unittest discover -s tests -v` passed all 4 tests: happy path and resulting state, invalid input/no environment state (including missing and malformed values), injected partial failure/state retention, and client timeout followed by eventual successful completion.
+
+## 2026-09-23 — Separate invalid-input scenarios
+
+**User request:** Replace grouped invalid-input coverage with separate test methods, preserve scope, update traceability if needed, run the full suite, and make one commit.
+
+**Assistant change:** Replaced the parameterized loop/subtests with distinct tests for missing `size`, unsupported `region`, and non-string `region`. Kept common HTTP/no-state assertions in a helper. Updated R4 traceability and the core test-case list. No API functionality changed.
+
+**Verification:** `python3 -m unittest discover -s tests -v` passed all 6 tests, including the three separate invalid-input cases.

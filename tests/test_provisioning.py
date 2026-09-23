@@ -39,6 +39,27 @@ class ProvisioningApiE2ETests(unittest.TestCase):
         status, result = request_json(self.base_url, "/environments", "POST", payload)
         return payload, status, result
 
+    def assert_rejected_without_state(self, payload, expected_field):
+        status, result = request_json(
+            self.base_url, "/environments", "POST", payload
+        )
+        self.assertEqual(status, 400, result)
+        self.assertEqual(result["error"], "validation_error")
+        self.assertIn(expected_field, result["details"])
+
+        query = quote(payload["name"], safe="")
+        status, environments = request_json(
+            self.base_url, f"/environments?name={query}"
+        )
+        self.assertEqual(status, 200, environments)
+        self.assertEqual(environments["items"], [])
+
+        status, operations = request_json(
+            self.base_url, f"/operations?environment_name={query}"
+        )
+        self.assertEqual(status, 200, operations)
+        self.assertEqual(operations["items"], [])
+
     def test_happy_path_persists_configuration_and_complete_resources(self):
         payload, status, accepted = self.create_environment()
         self.assertEqual(status, 202, accepted)
@@ -62,29 +83,25 @@ class ProvisioningApiE2ETests(unittest.TestCase):
             {"name": "network", "status": "READY"},
         ])
 
-    def test_invalid_requests_return_details_without_creating_state(self):
-        invalid_cases = [
-            ({"name": f"invalid-{uuid.uuid4().hex}", "region": "us-east"}, "size"),
-            ({"name": f"invalid-{uuid.uuid4().hex}", "region": "moon-1", "size": "small"}, "region"),
-            ({"name": f"invalid-{uuid.uuid4().hex}", "region": {"unexpected": "object"}, "size": "small"}, "region"),
-        ]
-        for payload, expected_field in invalid_cases:
-            with self.subTest(expected_field=expected_field):
-                status, result = request_json(
-                    self.base_url, "/environments", "POST", payload
-                )
-                self.assertEqual(status, 400, result)
-                self.assertEqual(result["error"], "validation_error")
-                self.assertIn(expected_field, result["details"])
-                query = quote(payload["name"], safe="")
-                status, listed = request_json(self.base_url, f"/environments?name={query}")
-                self.assertEqual(status, 200, listed)
-                self.assertEqual(listed["items"], [])
-                status, operations = request_json(
-                    self.base_url, f"/operations?environment_name={query}"
-                )
-                self.assertEqual(status, 200, operations)
-                self.assertEqual(operations["items"], [])
+    def test_missing_size_is_rejected_without_creating_environment_or_operation(self):
+        payload = {"name": f"invalid-{uuid.uuid4().hex}", "region": "us-east"}
+        self.assert_rejected_without_state(payload, "size")
+
+    def test_unsupported_region_is_rejected_without_creating_environment_or_operation(self):
+        payload = {
+            "name": f"invalid-{uuid.uuid4().hex}",
+            "region": "moon-1",
+            "size": "small",
+        }
+        self.assert_rejected_without_state(payload, "region")
+
+    def test_non_string_region_is_rejected_without_creating_environment_or_operation(self):
+        payload = {
+            "name": f"invalid-{uuid.uuid4().hex}",
+            "region": {"unexpected": "object"},
+            "size": "small",
+        }
+        self.assert_rejected_without_state(payload, "region")
 
     def test_injected_partial_failure_is_terminal_and_retains_prior_resource(self):
         _payload, status, accepted = self.create_environment(
