@@ -891,3 +891,44 @@ tests/test_provisioning.py::test_client_deadline_reports_last_state_and_operatio
 ### Assistant (commentary)
 
 > I’ll align the requirement wording with the actual test: R7 will specifically cover deleting a `READY` environment. I’ll clarify in README that the API also accepts `FAILED` environments, while the automated delete test exercises `READY`. No code or test changes.
+
+## 16. Make the provisioning-delete conflict test observe state
+
+### User
+
+> # Context from my IDE setup:
+>
+> ## Active file: requirements.md
+>
+> ## Open tabs:
+> - requirements.md: requirements.md
+> - requirements-dev.txt: requirements-dev.txt
+> - AI_LOG.md: AI_LOG.md
+> - test_provisioning.py: tests/test_provisioning.py
+> - helpers.py: tests/helpers.py
+>
+> ## My request:
+> Please make `test_delete_while_provisioning_returns_conflict` deterministic without adding API functionality. Instead of relying only on a fixed sleep/delay to assume the environment is still PROVISIONING, make the test explicitly confirm the environment is in `PROVISIONING` before issuing DELETE. Update only the test/helper/requirements documentation if necessary. Run the full pytest suite, commit this focused change, and push it to origin/main. Show me the test result and commit hash.
+
+### Assistant (commentary)
+
+> I’ll make the conflict test GET the environment and assert `PROVISIONING` immediately before DELETE. I’ll update the traceability wording to connect that state check to the `409` assertion, then run pytest and push one focused commit.
+
+### Tool/action output
+
+```text
+============================= test session starts ==============================
+platform darwin -- Python 3.13.1, pytest-9.1.1, pluggy-1.6.0
+collected 10 items
+tests/test_provisioning.py::test_happy_path_persists_configuration_and_complete_resources PASSED
+tests/test_provisioning.py::test_missing_size_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_unsupported_region_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_non_string_region_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_malformed_json_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_injected_compute_failure_rolls_back_prior_resources PASSED
+tests/test_provisioning.py::test_delete_ready_environment_removes_it_and_its_resources PASSED
+tests/test_provisioning.py::test_get_nonexistent_environment_returns_not_found PASSED
+tests/test_provisioning.py::test_delete_while_provisioning_returns_conflict PASSED
+tests/test_provisioning.py::test_client_deadline_reports_last_state_and_operation_can_finish_later PASSED
+============================== 10 passed in 7.98s ===============================
+```

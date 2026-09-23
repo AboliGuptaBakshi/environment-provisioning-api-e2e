@@ -169,6 +169,12 @@ def test_delete_while_provisioning_returns_conflict(slow_base_url):
     assert status == 202, accepted
     assert accepted["status"] == "PENDING"
 
+    status, environment = request_json(
+        slow_base_url, f"/environments/{accepted['environment_id']}"
+    )
+    assert status == 200, environment
+    assert environment["status"] == "PROVISIONING"
+
     status, response = request_json(
         slow_base_url,
         f"/environments/{accepted['environment_id']}",
