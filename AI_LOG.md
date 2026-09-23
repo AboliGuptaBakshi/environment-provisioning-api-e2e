@@ -13,3 +13,11 @@ Chronological record of AI-assisted work for this assessment. Entries capture th
 **User request:** Freeze the proposed scope, create the initial project structure, then commit it.
 
 **Assistant action:** Workspace was empty and not a Git repository. Selected Python, created `app/`, `tests/`, and `.github/workflows/`, and added this scope/traceability scaffold before initializing Git and making the first milestone commit.
+
+## 2026-09-23 — Minimal API and end-to-end suite
+
+**User request:** Implement the minimal REST API in the frozen scope, do not add stretch features, run the suite, and report the result.
+
+**Assistant implementation:** Added a standard-library HTTP server with SQLite-backed environments, operations, and resources. The API supports asynchronous provisioning, `network` then `compute`, validation, operation and environment reads, filtered environment listing for no-state checks, and per-request failure at `compute`. The documented partial-failure policy retains the already-created network and marks both operation and environment failed. Added real localhost HTTP tests using `unittest`, a monotonic bounded poll helper, local setup instructions, and a GitHub Actions pass/fail workflow. No idempotency feature was added.
+
+**Verification:** Initial sandbox test attempt could not bind an ephemeral localhost port. Reran with the required local-network permission. First run exposed an empty-query parsing issue in the no-state assertion; fixed query parsing and ensured SQLite connections are closed. Final command `python3 -m unittest discover -s tests -v` passed all 4 tests: happy path and resulting state, invalid input/no environment state (including missing and malformed values), injected partial failure/state retention, and client timeout followed by eventual successful completion.
