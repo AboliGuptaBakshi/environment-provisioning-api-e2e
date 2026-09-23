@@ -6,8 +6,12 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-def request_json(base_url: str, path: str, method: str = "GET", body: dict | None = None):
-    payload = None if body is None else json.dumps(body).encode("utf-8")
+def request_json(
+    base_url: str, path: str, method: str = "GET", body: dict | str | None = None
+):
+    payload = None if body is None else (
+        body.encode("utf-8") if isinstance(body, str) else json.dumps(body).encode("utf-8")
+    )
     request = Request(
         base_url + path,
         data=payload,

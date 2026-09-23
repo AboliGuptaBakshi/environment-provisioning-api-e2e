@@ -74,6 +74,31 @@ def test_non_string_region_is_rejected_without_creating_environment_or_operation
     assert_rejected_without_state(base_url, payload, "region")
 
 
+def test_malformed_json_is_rejected_without_creating_environment_or_operation(base_url):
+    name = f"invalid-{uuid.uuid4().hex}"
+    malformed_body = (
+        f'{{"name":"{name}","region":"us-east","size":"small",}}'
+    )
+    status, result = request_json(
+        base_url, "/environments", method="POST", body=malformed_body
+    )
+    assert status == 400, result
+    assert result == {
+        "error": "invalid_json",
+        "message": "Request body must be a JSON object",
+    }
+
+    query = quote(name, safe="")
+    status, environments = request_json(base_url, f"/environments?name={query}")
+    assert status == 200
+    assert environments["items"] == []
+    status, operations = request_json(
+        base_url, f"/operations?environment_name={query}"
+    )
+    assert status == 200
+    assert operations["items"] == []
+
+
 def test_injected_compute_failure_rolls_back_prior_resources(
     base_url, create_environment
 ):

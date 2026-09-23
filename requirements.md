@@ -23,10 +23,10 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R1 | A valid request is accepted with environment and operation identifiers. | Submit via REST; assert response fields and retrieve the identified records. |
 | R2 | Successful provisioning reaches a terminal success state within a bounded client deadline. | Poll operation using a monotonic deadline; assert terminal state. |
 | R3 | A successful environment reflects requested configuration and has the complete expected resource set. | Read environment and resources after success; assert values and completeness. |
-| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
+| R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover malformed JSON, a missing required size, unsupported region, and non-string region; each checks the relevant error and confirms both environment and operation lists remain empty for its unique name. |
 | R5 | A deterministic injected `compute` failure produces a terminal failed operation and stable reason. | Inject failure after network creation; poll to `FAILED` and assert the stable error. |
 | R6 | An injected `compute` failure rolls back resources already created for that environment. | Read the failed environment and assert its resource list is empty. |
-| R7 | Deleting a terminal environment removes the environment and its resources while preserving operation history. | Provision to `READY`, DELETE and assert `204`; GET and name-filtered listing return no environment, while the original operation remains readable. |
+| R7 | Deleting a `READY` environment removes the environment and its resources while preserving operation history. | Provision to `READY`, DELETE and assert `204`; GET and name-filtered listing return no environment, while the original operation remains readable. |
 | R8 | GET for an unknown or deleted environment returns `404 Not Found`. | GET a unique nonexistent ID and assert `{"error":"not_found"}`; the delete lifecycle also checks the deleted ID. |
 | R9 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
 
@@ -40,13 +40,14 @@ Prioritize lifecycle correctness and externally visible state because false succ
 2. Missing required size: verify a field-level validation error and no environment or operation.
 3. Unsupported region: verify a field-level validation error and no environment or operation.
 4. Non-string region: verify malformed value handling, a field-level validation error, and no environment or operation.
-5. Injected `compute` failure: fail after network creation; verify terminal failure, stable reason, and that rollback removes all previously created resources.
-6. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
-7. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
-8. Delete a ready environment: assert `204`, then verify GET and filtered listing show it is absent while its completed operation remains available.
-9. GET a nonexistent environment: assert `404 Not Found` and the not-found error payload.
-10. Delete while provisioning: use a server fixture with a controlled longer provisioning delay, assert `409 Conflict`, and verify provisioning continues to its normal successful state.
-11. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
+5. Malformed JSON: send an invalid JSON document; assert `400 invalid_json` and no environment or operation.
+6. Injected `compute` failure: fail after network creation; verify terminal failure, stable reason, and that rollback removes all previously created resources.
+7. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
+8. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
+9. Delete a ready environment: assert `204`, then verify GET and filtered listing show it is absent while its completed operation remains available.
+10. GET a nonexistent environment: assert `404 Not Found` and the not-found error payload.
+11. Delete while provisioning: use a server fixture with a controlled longer provisioning delay, assert `409 Conflict`, and verify provisioning continues to its normal successful state.
+12. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
 
 ## Determinism and independence
 
