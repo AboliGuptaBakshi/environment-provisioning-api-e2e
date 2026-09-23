@@ -74,7 +74,7 @@ def test_non_string_region_is_rejected_without_creating_environment_or_operation
     assert_rejected_without_state(base_url, payload, "region")
 
 
-def test_injected_partial_failure_is_terminal_and_retains_prior_resource(
+def test_injected_compute_failure_rolls_back_prior_resources(
     base_url, create_environment
 ):
     _payload, status, accepted = create_environment(
@@ -90,7 +90,7 @@ def test_injected_partial_failure_is_terminal_and_retains_prior_resource(
     )
     assert status == 200, environment
     assert environment["status"] == "FAILED"
-    assert environment["resources"] == [{"name": "network", "status": "READY"}]
+    assert environment["resources"] == []
 
 
 def test_client_deadline_reports_last_state_and_operation_can_finish_later(

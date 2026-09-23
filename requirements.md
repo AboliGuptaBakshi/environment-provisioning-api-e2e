@@ -11,7 +11,7 @@ A generic Python REST API simulates provisioning one kind of environment and its
 3. `GET /operations/{id}` exposes `PENDING`, `SUCCEEDED`, or `FAILED` and its error, if any.
 4. `GET /environments/{id}` exposes environment configuration, lifecycle state, and created resources. Filtered `GET /environments?name=...` and `GET /operations?environment_name=...` support no-state validation checks.
 
-The supported region is `us-east`; sizes are `small` and `medium`. Names must be 1–63 characters and contain only letters, digits, and hyphens. On failure, previously created resources are retained and returned with a failed environment state. For deterministic assessment testing, the simulator accepts optional `failure_injection: {"resource": "compute"}`; this fails at that named step after network creation. Failure injection is configurable and enabled by default for local/assessment use.
+The supported region is `us-east`; sizes are `small` and `medium`. Names must be 1–63 characters and contain only letters, digits, and hyphens. On an injected `compute` failure, the simulator deletes resources already created for that environment and marks both the environment and operation failed in the same database transaction. The resulting environment has no resources. For deterministic assessment testing, the simulator accepts optional `failure_injection: {"resource": "compute"}`; this fails at that named step after network creation. Failure injection is configurable and enabled by default for local/assessment use.
 
 The API is a small Python standard-library HTTP server with SQLite persistence; pytest tests use HTTP over localhost to exercise the actual REST boundary. Pytest is the only test dependency.
 
@@ -23,8 +23,8 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R2 | Successful provisioning reaches a terminal success state within a bounded client deadline. | Poll operation using a monotonic deadline; assert terminal state. |
 | R3 | A successful environment reflects requested configuration and has the complete expected resource set. | Read environment and resources after success; assert values and completeness. |
 | R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
-| R5 | A deterministic injected resource failure produces a terminal failed operation and stable reason. | Request failure at a named provisioning step; assert operation state and reason. |
-| R6 | State after partial failure follows the documented cleanup/retention policy. | Read environment and resources after injected failure; assert exact resulting state. |
+| R5 | A deterministic injected `compute` failure produces a terminal failed operation and stable reason. | Inject failure after network creation; poll to `FAILED` and assert the stable error. |
+| R6 | An injected `compute` failure rolls back resources already created for that environment. | Read the failed environment and assert its resource list is empty. |
 | R7 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
 
 ## Risk-based strategy
@@ -37,7 +37,7 @@ Prioritize lifecycle correctness and externally visible state because false succ
 2. Missing required size: verify a field-level validation error and no environment or operation.
 3. Unsupported region: verify a field-level validation error and no environment or operation.
 4. Non-string region: verify malformed value handling, a field-level validation error, and no environment or operation.
-5. Injected partial failure: fail at a named resource step; verify terminal failure, stable reason, and the documented state of resources already created.
+5. Injected `compute` failure: fail after network creation; verify terminal failure, stable reason, and that rollback removes all previously created resources.
 6. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
 7. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
 8. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
@@ -53,7 +53,7 @@ Failure injection will be per request and target a named provisioning step, with
 - Authentication, authorization, quotas, and multi-tenancy.
 - Broad load, performance, chaos, and security testing.
 - Multiple environment types, complex dependency graphs, and exhaustive validation permutations.
-- Provider-specific behavior, production-grade rollback guarantees, and idempotency unless stretch time permits.
+- Provider-specific behavior, production-grade rollback guarantees, and idempotency unless stretch time permits. The simulator's injected-failure cleanup only demonstrates deterministic rollback of its own records.
 
 ## CI gate
 

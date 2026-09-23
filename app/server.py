@@ -73,6 +73,9 @@ def provision(db_path: str, environment_id: str, operation_id: str,
             db.row_factory = sqlite3.Row
             if fail_resource == resource:
                 db.execute(
+                    "DELETE FROM resources WHERE environment_id=?", (environment_id,)
+                )
+                db.execute(
                     "UPDATE environments SET status='FAILED' WHERE id=?", (environment_id,)
                 )
                 db.execute(

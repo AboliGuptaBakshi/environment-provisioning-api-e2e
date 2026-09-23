@@ -37,3 +37,11 @@ Chronological record of AI-assisted work for this assessment. Entries capture th
 **Assistant change:** Replaced the `unittest.TestCase` class with six pytest test functions. Added per-test server, base URL, and environment-factory fixtures. Kept HTTP request and bounded polling helpers in `tests/helpers.py`. Added `requirements-dev.txt`, updated README and requirement/test runner references, and changed CI to install pytest and run `python -m pytest -v`. No scenarios or API features were added.
 
 **Verification:** Pytest was not installed initially. The first package install attempt was blocked by sandbox network restrictions; installed the declared dependency with network permission. `python3 -m pytest -v` passed all 6 scenarios in 3.63 seconds.
+
+## 2026-09-23 — Deterministic rollback on injected compute failure
+
+**User request:** Implement the proposed behavior for an injected `compute` failure: deterministic rollback of previously created resources; update the test, requirements/traceability, and relevant documentation; run the full suite and make one commit without adding other functionality.
+
+**Assistant change:** In the existing injected-failure transaction, delete resources for that environment before marking its environment and operation failed. Updated the failure test to assert an empty resource list, and documented the simulator's rollback policy and its boundary from production-grade provider rollback. No API endpoints or failure modes were added.
+
+**Verification:** `python3 -m pytest -v` passed all 6 tests, including the rollback assertion.

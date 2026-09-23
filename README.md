@@ -25,7 +25,7 @@ python3 -m pip install -r requirements-dev.txt
 python3 -m app
 ```
 
-The API listens at `http://127.0.0.1:8080` by default. Run the end-to-end suite from the repository root in another terminal:
+The API listens at `http://127.0.0.1:8080` by default. An injected `compute` failure rolls back resources already created for that environment and leaves the environment and operation failed. Run the end-to-end suite from the repository root in another terminal:
 
 ```sh
 python3 -m pytest -v
