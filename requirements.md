@@ -10,6 +10,7 @@ A generic Python REST API simulates provisioning one kind of environment and its
 2. Provisioning runs asynchronously and creates `network` followed by `compute` resources.
 3. `GET /operations/{id}` exposes `PENDING`, `SUCCEEDED`, or `FAILED` and its error, if any.
 4. `GET /environments/{id}` exposes environment configuration, lifecycle state, and created resources. Filtered `GET /environments?name=...` and `GET /operations?environment_name=...` support no-state validation checks.
+5. `DELETE /environments/{id}` synchronously deletes a `READY` or `FAILED` environment and its resources, returning `204 No Content`; its completed operation records remain available as history. Deleting while `PROVISIONING` returns `409 Conflict`; deleting an unknown ID returns `404 Not Found`. A deleted environment is no longer returned by GET or the filtered environment list.
 
 The supported region is `us-east`; sizes are `small` and `medium`. Names must be 1–63 characters and contain only letters, digits, and hyphens. On an injected `compute` failure, the simulator deletes resources already created for that environment and marks both the environment and operation failed in the same database transaction. The resulting environment has no resources. For deterministic assessment testing, the simulator accepts optional `failure_injection: {"resource": "compute"}`; this fails at that named step after network creation. Failure injection is configurable and enabled by default for local/assessment use.
 
@@ -25,7 +26,9 @@ The API is a small Python standard-library HTTP server with SQLite persistence; 
 | R4 | Invalid or unsupported input is rejected with useful validation details and creates no environment or operation. | Separate pytest cases cover a missing required size, unsupported region, and non-string region; each asserts the field error and confirms both environment and operation lists remain empty for its unique name. |
 | R5 | A deterministic injected `compute` failure produces a terminal failed operation and stable reason. | Inject failure after network creation; poll to `FAILED` and assert the stable error. |
 | R6 | An injected `compute` failure rolls back resources already created for that environment. | Read the failed environment and assert its resource list is empty. |
-| R7 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
+| R7 | Deleting a terminal environment removes the environment and its resources while preserving operation history. | Provision to `READY`, DELETE and assert `204`; GET and name-filtered listing return no environment, while the original operation remains readable. |
+| R8 | GET for an unknown or deleted environment returns `404 Not Found`. | GET a unique nonexistent ID and assert `{"error":"not_found"}`; the delete lifecycle also checks the deleted ID. |
+| R9 (stretch) | Repeating a request with the same idempotency key does not create a duplicate environment. | Repeat request and assert stable identity and single resulting environment. |
 
 ## Risk-based strategy
 
@@ -40,7 +43,10 @@ Prioritize lifecycle correctness and externally visible state because false succ
 5. Injected `compute` failure: fail after network creation; verify terminal failure, stable reason, and that rollback removes all previously created resources.
 6. Client timeout: use a deliberately slow operation and a short monotonic deadline; verify the test helper exits within its bound and reports the last observed state. A client deadline is not interpreted as proof that the service operation itself failed.
 7. State consistency: verify success is asserted only after the environment is ready and its required resources are observable.
-8. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
+8. Delete a ready environment: assert `204`, then verify GET and filtered listing show it is absent while its completed operation remains available.
+9. GET a nonexistent environment: assert `404 Not Found` and the not-found error payload.
+10. Delete while provisioning: use a server fixture with a controlled longer provisioning delay, assert `409 Conflict`, and verify provisioning continues to its normal successful state.
+11. Stretch: repeat a request with the same idempotency key and verify there is no duplicate.
 
 ## Determinism and independence
 

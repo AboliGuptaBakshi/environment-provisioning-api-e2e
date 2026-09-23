@@ -25,7 +25,7 @@ python3 -m pip install -r requirements-dev.txt
 python3 -m app
 ```
 
-The API listens at `http://127.0.0.1:8080` by default. An injected `compute` failure rolls back resources already created for that environment and leaves the environment and operation failed. Run the end-to-end suite from the repository root in another terminal:
+The API listens at `http://127.0.0.1:8080` by default. An injected `compute` failure rolls back resources already created for that environment and leaves the environment and operation failed. Delete a `READY` or `FAILED` environment with `DELETE /environments/{id}`; it returns `204`, removes the environment and its resources, and preserves completed operation history. A delete during `PROVISIONING` returns `409`; GET for a deleted or unknown environment returns `404`. Run the end-to-end suite from the repository root in another terminal:
 
 ```sh
 python3 -m pytest -v

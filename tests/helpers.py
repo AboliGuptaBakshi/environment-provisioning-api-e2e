@@ -19,7 +19,8 @@ def request_json(base_url: str, path: str, method: str = "GET", body: dict | Non
     except HTTPError as exc:
         response = exc
     with response:
-        return response.status, json.loads(response.read().decode("utf-8"))
+        response_body = response.read().decode("utf-8")
+        return response.status, json.loads(response_body) if response_body else None
 
 
 def wait_for_operation(base_url: str, operation_id: str, timeout: float = 2.0,

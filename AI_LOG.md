@@ -784,3 +784,47 @@ Git output:
 ### Assistant (final)
 
 > Replaced the summarized entries with a chronological conversation log in `AI_LOG.md`. It records the original failure behavior retaining `network`, the later deterministic rollback change, the user requests, assistant responses, and significant test, API, and Git outputs. No application code, tests, or other documentation were changed.
+
+## 13. Add environment deletion lifecycle
+
+### User
+
+> # Context from my IDE setup:
+>
+> ## Active file: AI_LOG.md
+>
+> ## Open tabs:
+> - AI_LOG.md: AI_LOG.md
+> - test_provisioning.py: tests/test_provisioning.py
+> - helpers.py: tests/helpers.py
+> - conftest.py: tests/conftest.py
+> - server.py: app/server.py
+>
+> ## My request:
+> implement exactly this DELETE proposal **plus the separate&#x20;****`DELETE while PROVISIONING → 409`****&#x20;test**, update requirements/traceability/README, run the full suite, commit it, and push it.
+
+### Assistant (commentary)
+
+> I’ll add the synchronous delete contract as proposed, including retained operation history, and add three tests: successful delete/readback, unknown-ID GET, and a separate delete-during-provisioning `409` case. I’ll give that last case a longer fixture delay so it observes `PROVISIONING` reliably, then update the docs, run pytest, commit, and push.
+
+### Assistant (commentary)
+
+> The DELETE route and three tests are added. The in-progress test uses a fixture-configured delay, then confirms the rejected delete did not disrupt provisioning. I’ve documented the status codes and retained operation history; now I’m running the full suite.
+
+### Tool/action output
+
+```text
+============================= test session starts ==============================
+platform darwin -- Python 3.13.1, pytest-9.1.1, pluggy-1.6.0
+collected 9 items
+tests/test_provisioning.py::test_happy_path_persists_configuration_and_complete_resources PASSED
+tests/test_provisioning.py::test_missing_size_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_unsupported_region_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_non_string_region_is_rejected_without_creating_environment_or_operation PASSED
+tests/test_provisioning.py::test_injected_compute_failure_rolls_back_prior_resources PASSED
+tests/test_provisioning.py::test_delete_ready_environment_removes_it_and_its_resources PASSED
+tests/test_provisioning.py::test_get_nonexistent_environment_returns_not_found PASSED
+tests/test_provisioning.py::test_delete_while_provisioning_returns_conflict PASSED
+tests/test_provisioning.py::test_client_deadline_reports_last_state_and_operation_can_finish_later PASSED
+============================== 9 passed in 7.42s ===============================
+```

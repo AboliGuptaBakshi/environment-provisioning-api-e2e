@@ -10,27 +10,45 @@ from tests.helpers import request_json
 
 
 @pytest.fixture
-def api_server(tmp_path):
-    """Run an ephemeral HTTP server with a fresh database for each test."""
-    server = create_server(
-        port=0,
-        db_path=str(tmp_path / "assessment.sqlite3"),
-        step_delay=0.08,
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+def api_server_factory(tmp_path):
+    """Start isolated servers with configurable provisioning delay for a test."""
+    running_servers = []
+
+    def start(step_delay=0.08):
+        db_path = tmp_path / f"assessment-{len(running_servers)}.sqlite3"
+        server = create_server(port=0, db_path=str(db_path), step_delay=step_delay)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        running_servers.append((server, thread))
+        return server
+
     try:
-        yield server
+        yield start
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
+        for server, thread in reversed(running_servers):
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+
+@pytest.fixture
+def api_server(api_server_factory):
+    """Run an ephemeral HTTP server with a fresh database for each test."""
+    return api_server_factory()
 
 
 @pytest.fixture
 def base_url(api_server):
     """Base URL for the test's isolated API server."""
     host, port = api_server.server_address
+    return f"http://{host}:{port}"
+
+
+@pytest.fixture
+def slow_base_url(api_server_factory):
+    """Provide time to observe the provisioning state before a test action."""
+    server = api_server_factory(step_delay=1.0)
+    host, port = server.server_address
     return f"http://{host}:{port}"
 
 

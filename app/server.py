@@ -173,6 +173,34 @@ def make_handler(db_path: str, step_delay: float, allow_failure_injection: bool)
                 "status": "PENDING",
             })
 
+        def do_DELETE(self):
+            segments = urlparse(self.path).path.strip("/").split("/")
+            if len(segments) != 2 or segments[0] != "environments":
+                self.respond(404, {"error": "not_found"})
+                return
+
+            environment_id = segments[1]
+            with database(db_path) as db:
+                row = db.execute(
+                    "SELECT status FROM environments WHERE id=?", (environment_id,)
+                ).fetchone()
+                if row is None:
+                    self.respond(404, {"error": "not_found"})
+                    return
+                if row[0] == "PROVISIONING":
+                    self.respond(409, {
+                        "error": "environment_provisioning",
+                        "message": "cannot delete an environment while it is provisioning",
+                    })
+                    return
+
+                db.execute("DELETE FROM resources WHERE environment_id=?", (environment_id,))
+                db.execute("DELETE FROM environments WHERE id=?", (environment_id,))
+
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def do_GET(self):
             parsed = urlparse(self.path)
             segments = parsed.path.strip("/").split("/")
